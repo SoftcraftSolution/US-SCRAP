@@ -21,12 +21,14 @@ app.get('/api/energy-futures', async (req, res) => {
             waitUntil: 'networkidle2',
         });
 
-        // Scrape Energy Futures data
-        const energyFuturesData = await page.evaluate(() => {
-            const data = [];
-            const rows = document.querySelectorAll('div[data-test="MarketTable"] .BasicTable-tableBody tr');
+        // Scrape both Energy Futures and Metal Futures data
+        const futuresData = await page.evaluate(() => {
+            const energyData = [];
+            const metalData = [];
 
-            rows.forEach(row => {
+            // Scrape Energy Futures data
+            const energyRows = document.querySelectorAll('div[data-test="MarketTable"] .BasicTable-tableBody tr');
+            energyRows.forEach(row => {
                 const symbol = row.querySelector('.BasicTable-symbolName a')?.innerText.trim() || '';
                 const price = row.querySelector('td:nth-child(2)')?.innerText.trim() || '';
                 const change = row.querySelector('td:nth-child(3)')?.innerText.trim() || '';
@@ -34,46 +36,35 @@ app.get('/api/energy-futures', async (req, res) => {
                 const volume = row.querySelector('td:nth-child(5)')?.innerText.trim() || '';
 
                 if (symbol) {
-                    data.push({ symbol, price, change, percentChange, volume });
+                    energyData.push({ symbol, price, change, percentChange, volume });
                 }
             });
 
-            return data;
+            // Scrape Metal Futures data
+            const metalRows = document.querySelectorAll('.MarketsSectionTable-top [data-test="MarketTable"] .BasicTable-tableBody tr');
+            metalRows.forEach(row => {
+                const symbol = row.querySelector('.BasicTable-symbolName a')?.innerText.trim() || '';
+                const price = row.querySelector('td:nth-child(2)')?.innerText.trim() || '';
+                const change = row.querySelector('td:nth-child(3)')?.innerText.trim() || '';
+                const percentChange = row.querySelector('td:nth-child(4)')?.innerText.trim() || '';
+                const volume = row.querySelector('td:nth-child(5)')?.innerText.trim() || '';
+
+                // Include only relevant metal symbols
+                if (symbol && (symbol.includes('GOLD') || symbol.includes('SILVER') || symbol.includes('PLATINUM') || symbol.includes('PALLADIUM'))) {
+                    metalData.push({ symbol, price, change, percentChange, volume });
+                }
+            });
+
+            return { energyFutures: energyData, metalFutures: metalData };
         });
 
-        // Scrape Metal Futures data
-        const metalFuturesData = await page.evaluate(() => {
-            const data = [];
-            // Select the Metal Futures section using the correct traversal
-            const metalHeader = Array.from(document.querySelectorAll('h3')).find(h => h.innerText.includes("METAL FUTURES"));
-            const metalTable = metalHeader ? metalHeader.nextElementSibling.querySelector('[data-test="MarketTable"]') : null;
-
-            if (metalTable) {
-                const rows = metalTable.querySelectorAll('.BasicTable-tableBody tr');
-
-                rows.forEach(row => {
-                    const symbol = row.querySelector('.BasicTable-symbolName a')?.innerText.trim() || '';
-                    const price = row.querySelector('td:nth-child(2)')?.innerText.trim() || '';
-                    const change = row.querySelector('td:nth-child(3)')?.innerText.trim() || '';
-                    const percentChange = row.querySelector('td:nth-child(4)')?.innerText.trim() || '';
-                    const volume = row.querySelector('td:nth-child(5)')?.innerText.trim() || '';
-
-                    if (symbol) {
-                        data.push({ symbol, price, change, percentChange, volume });
-                    }
-                });
-            }
-
-            return data;
-        });
-
-        // Log Metal Futures data to the console
-        console.log('Metal Futures Data:', metalFuturesData);
-
+        // Log data to the console
+        console.log('Futures Data:', futuresData);
+        
         // Return the scraped energy and metal futures data
         res.json({
-            energyFutures: { tableHeader: "Energy Futures", data: energyFuturesData },
-            metalFutures: { tableHeader: "Metal Futures", data: metalFuturesData },
+            energyFutures: { tableHeader: "Energy Futures", data: futuresData.energyFutures },
+            metalFutures: { tableHeader: "Metal Futures", data: futuresData.metalFutures },
         });
     } catch (error) {
         console.error('Error scraping data:', error);
@@ -85,6 +76,7 @@ app.get('/api/energy-futures', async (req, res) => {
     }
 });
 
+// Start the server
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
