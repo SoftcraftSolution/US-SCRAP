@@ -13,13 +13,13 @@ app.get('/api/energy-futures', async (req, res) => {
             args: chromium.args,
             defaultViewport: chromium.defaultViewport,
             executablePath: await chromium.executablePath,
-            headless: chromium.headless,
+            headless: true,
             ignoreHTTPSErrors: true,
         });
 
         const page = await browser.newPage();
 
-        // Navigate to the CNBC futures and commodities page with a longer timeout
+        // Navigate to the CNBC futures and commodities page
         await page.goto('https://www.cnbc.com/futures-and-commodities/', {
             waitUntil: 'networkidle2',
             timeout: 60000, // 60 seconds timeout
