@@ -1,26 +1,25 @@
 const express = require('express');
-const puppeteer = require('puppeteer-core');
-const chromium = require('chrome-aws-lambda'); // Import chrome-aws-lambda for serverless environments
+const puppeteer = require('puppeteer'); // Switch to Puppeteer
+const chromium = require('chrome-aws-lambda'); // For serverless environments
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Define the route for scraping data
 app.get('/api/energy-futures', async (req, res) => {
     let browser;
     try {
-        // Launch Puppeteer with chrome-aws-lambda for serverless environments
+        // Launch Puppeteer
         browser = await puppeteer.launch({
             args: chromium.args,
             defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath,
-            headless: chromium.headless,
+            executablePath: await chromium.executablePath || puppeteer.executablePath(),
+            headless: true,
             ignoreHTTPSErrors: true,
         });
 
         const page = await browser.newPage();
 
-        // Navigate to the CNBC futures and commodities page with a longer timeout
+        // Navigate to the CNBC futures and commodities page
         await page.goto('https://www.cnbc.com/futures-and-commodities/', {
             waitUntil: 'networkidle2',
             timeout: 60000, // 60 seconds timeout
