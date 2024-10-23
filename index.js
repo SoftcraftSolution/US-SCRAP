@@ -1,6 +1,7 @@
 const express = require('express');
 const puppeteer = require('puppeteer-core');
 const chromium = require('chrome-aws-lambda'); // For serverless environments
+const isLocal = !process.env.AWS_LAMBDA_FUNCTION_VERSION; // Check if running locally or in serverless
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,18 +9,28 @@ const PORT = process.env.PORT || 3000;
 app.get('/api/energy-futures', async (req, res) => {
     let browser;
     try {
-        // Launch Puppeteer browser for serverless environment
-        browser = await puppeteer.launch({
-            args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath,
-            headless: true,
-            ignoreHTTPSErrors: true,
-        });
+        // Launch Puppeteer browser based on environment
+        if (isLocal) {
+            // Use locally installed puppeteer for local development
+            browser = await puppeteer.launch({
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox'],
+                defaultViewport: null,
+            });
+        } else {
+            // Use chrome-aws-lambda for serverless environments
+            browser = await puppeteer.launch({
+                args: chromium.args,
+                defaultViewport: chromium.defaultViewport,
+                executablePath: await chromium.executablePath,
+                headless: chromium.headless,
+                ignoreHTTPSErrors: true,
+            });
+        }
 
         const page = await browser.newPage();
 
-        // Navigate to the CNBC futures and commodities page
+        // Navigate to the CNBC futures and commodities page with a longer timeout
         await page.goto('https://www.cnbc.com/futures-and-commodities/', {
             waitUntil: 'networkidle2',
             timeout: 60000, // 60 seconds timeout
@@ -62,6 +73,9 @@ app.get('/api/energy-futures', async (req, res) => {
             return { energyFutures: energyData, metalFutures: metalData };
         });
 
+        // Log data to the console
+        console.log('Futures Data:', futuresData);
+        
         // Return the scraped energy and metal futures data
         res.json({
             energyFutures: { tableHeader: "Energy Futures", data: futuresData.energyFutures },
