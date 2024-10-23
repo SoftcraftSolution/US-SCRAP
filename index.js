@@ -1,32 +1,20 @@
 const express = require('express');
-const puppeteer = require('puppeteer-core');
-const chromium = require('chrome-aws-lambda'); // For serverless environments
-const isLocal = !process.env.AWS_LAMBDA_FUNCTION_VERSION; // Check if running locally or in serverless
+const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Define the route for scraping data
 app.get('/api/energy-futures', async (req, res) => {
     let browser;
     try {
-        // Launch Puppeteer browser based on environment
-        if (isLocal) {
-            // Use locally installed puppeteer for local development
-            browser = await puppeteer.launch({
-                headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox'],
-                defaultViewport: null,
-            });
-        } else {
-            // Use chrome-aws-lambda for serverless environments
-            browser = await puppeteer.launch({
-                args: chromium.args,
-                defaultViewport: chromium.defaultViewport,
-                executablePath: await chromium.executablePath,
-                headless: chromium.headless,
-                ignoreHTTPSErrors: true,
-            });
-        }
+        // Launch Puppeteer with Chrome executable path for Windows
+        browser = await puppeteer.launch({
+            executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', // Update the path if Chrome is installed elsewhere
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            defaultViewport: null,
+        });
 
         const page = await browser.newPage();
 
