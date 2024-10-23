@@ -1,5 +1,6 @@
 const express = require('express');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const chromium = require('chrome-aws-lambda'); // Import chrome-aws-lambda for serverless environments
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,12 +9,13 @@ const PORT = process.env.PORT || 3000;
 app.get('/api/energy-futures', async (req, res) => {
     let browser;
     try {
-        // Launch Puppeteer with Chrome executable path for Windows
+        // Launch Puppeteer with chrome-aws-lambda for serverless environments
         browser = await puppeteer.launch({
-            executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', // Update the path if Chrome is installed elsewhere
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-            defaultViewport: null,
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: await chromium.executablePath,
+            headless: chromium.headless,
+            ignoreHTTPSErrors: true,
         });
 
         const page = await browser.newPage();
