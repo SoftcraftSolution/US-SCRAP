@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "postinstall": "npx puppeteer install", 
+    "postinstall": "npx puppeteer install",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -17,6 +17,7 @@
     "chrome-aws-lambda": "^10.1.0",
     "express": "^4.21.1",
     "nodemon": "^3.1.7",
+    "playwright": "^1.48.1",
     "puppeteer": "^23.6.0"
   }
 }

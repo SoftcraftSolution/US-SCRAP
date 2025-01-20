@@ -1,55 +1,77 @@
 const express = require('express');
-const axios = require('axios');
-const cheerio = require('cheerio');
+const puppeteer = require('puppeteer-core');
+const chromium = require('chrome-aws-lambda'); // For serverless environments
+const isLocal = !process.env.AWS_LAMBDA_FUNCTION_VERSION; // Check if running locally or in serverless
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3005;
 
 app.get('/api/energy-futures', async (req, res) => {
+    let browser;
     try {
-        // Fetch the HTML of the CNBC futures and commodities page
-        const { data } = await axios.get('https://www.cnbc.com/futures-and-commodities/', {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36'
-            }
-        });
+        // Launch Puppeteer browser based on environment
+        if (isLocal) {
+            // Use locally installed puppeteer for local development
+            const puppeteerLocal = require('puppeteer'); // Standard Puppeteer for local
+            browser = await puppeteerLocal.launch({
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox'],
+                defaultViewport: null,
+            });
+        } else {
+            // Use chrome-aws-lambda for serverless environments like Vercel or AWS Lambda
+            browser = await puppeteer.launch({
+                args: chromium.args,
+                defaultViewport: chromium.defaultViewport,
+                executablePath: await chromium.executablePath,
+                headless: chromium.headless,
+                ignoreHTTPSErrors: true,
+            });
+        }
 
-        // Load the HTML into cheerio
-        const $ = cheerio.load(data);
+        const page = await browser.newPage();
+
+        // Navigate to the CNBC futures and commodities page with a longer timeout
+        await page.goto('https://www.cnbc.com/futures-and-commodities/', {
+            waitUntil: 'networkidle2',
+            timeout: 60000, // 60 seconds timeout
+        });
 
         // Scrape both Energy Futures and Metal Futures data
-        const futuresData = {
-            energyFutures: [],
-            metalFutures: [],
-        };
+        const futuresData = await page.evaluate(() => {
+            const energyData = [];
+            const metalData = [];
 
-        // Scrape Energy Futures data
-        const energyRows = $('div[data-test="MarketTable"] .BasicTable-tableBody tr');
-        energyRows.each((index, row) => {
-            const symbol = $(row).find('.BasicTable-symbolName a').text().trim() || '';
-            const price = $(row).find('td:nth-child(2)').text().trim() || '';
-            const change = $(row).find('td:nth-child(3)').text().trim() || '';
-            const percentChange = $(row).find('td:nth-child(4)').text().trim() || '';
-            const volume = $(row).find('td:nth-child(5)').text().trim() || '';
+            // Scrape Energy Futures data
+            const energyRows = document.querySelectorAll('div[data-test="MarketTable"] .BasicTable-tableBody tr');
+            energyRows.forEach(row => {
+                const symbol = row.querySelector('.BasicTable-symbolName a')?.innerText.trim() || '';
+                const price = row.querySelector('td:nth-child(2)')?.innerText.trim() || '';
+                const change = row.querySelector('td:nth-child(3)')?.innerText.trim() || '';
+                const percentChange = row.querySelector('td:nth-child(4)')?.innerText.trim() || '';
+                const volume = row.querySelector('td:nth-child(5)')?.innerText.trim() || '';
 
-            if (symbol) {
-                futuresData.energyFutures.push({ symbol, price, change, percentChange, volume });
-            }
-        });
+                if (symbol) {
+                    energyData.push({ symbol, price, change, percentChange, volume });
+                }
+            });
 
-        // Scrape Metal Futures data
-        const metalRows = $('.MarketsSectionTable-top [data-test="MarketTable"] .BasicTable-tableBody tr');
-        metalRows.each((index, row) => {
-            const symbol = $(row).find('.BasicTable-symbolName a').text().trim() || '';
-            const price = $(row).find('td:nth-child(2)').text().trim() || '';
-            const change = $(row).find('td:nth-child(3)').text().trim() || '';
-            const percentChange = $(row).find('td:nth-child(4)').text().trim() || '';
-            const volume = $(row).find('td:nth-child(5)').text().trim() || '';
+            // Scrape Metal Futures data
+            const metalRows = document.querySelectorAll('.MarketsSectionTable-top [data-test="MarketTable"] .BasicTable-tableBody tr');
+            metalRows.forEach(row => {
+                const symbol = row.querySelector('.BasicTable-symbolName a')?.innerText.trim() || '';
+                const price = row.querySelector('td:nth-child(2)')?.innerText.trim() || '';
+                const change = row.querySelector('td:nth-child(3)')?.innerText.trim() || '';
+                const percentChange = row.querySelector('td:nth-child(4)')?.innerText.trim() || '';
+                const volume = row.querySelector('td:nth-child(5)')?.innerText.trim() || '';
 
-            // Include only relevant metal symbols
-            if (symbol && (symbol.includes('GOLD') || symbol.includes('SILVER') || symbol.includes('PLATINUM') || symbol.includes('PALLADIUM'))) {
-                futuresData.metalFutures.push({ symbol, price, change, percentChange, volume });
-            }
+                // Include only relevant metal symbols
+                if (symbol && (symbol.includes('GOLD') || symbol.includes('SILVER') || symbol.includes('PLATINUM') || symbol.includes('PALLADIUM'))) {
+                    metalData.push({ symbol, price, change, percentChange, volume });
+                }
+            });
+
+            return { energyFutures: energyData, metalFutures: metalData };
         });
 
         // Log data to the console
@@ -63,6 +85,10 @@ app.get('/api/energy-futures', async (req, res) => {
     } catch (error) {
         console.error('Error scraping data:', error);
         res.status(500).json({ error: 'An error occurred while scraping data.' });
+    } finally {
+        if (browser) {
+            await browser.close(); // Ensure the browser is closed on completion
+        }
     }
 });
 
