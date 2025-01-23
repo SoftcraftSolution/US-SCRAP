@@ -1,39 +1,22 @@
 const express = require('express');
-const puppeteer = require('puppeteer-core');
-const chromium = require('chrome-aws-lambda'); // For serverless environments
-const isLocal = !process.env.AWS_LAMBDA_FUNCTION_VERSION; // Check if running locally or in serverless
-
+const { chromium } = require('playwright'); // Use Playwright's chromium browser
 const app = express();
 const PORT = process.env.PORT || 3005;
 
 app.get('/api/energy-futures', async (req, res) => {
     let browser;
     try {
-        // Launch Puppeteer browser based on environment
-        if (isLocal) {
-            // Use locally installed puppeteer for local development
-            const puppeteerLocal = require('puppeteer'); // Standard Puppeteer for local
-            browser = await puppeteerLocal.launch({
-                headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox'],
-                defaultViewport: null,
-            });
-        } else {
-            // Use chrome-aws-lambda for serverless environments like Vercel or AWS Lambda
-            browser = await puppeteer.launch({
-                args: chromium.args,
-                defaultViewport: chromium.defaultViewport,
-                executablePath: await chromium.executablePath,
-                headless: chromium.headless,
-                ignoreHTTPSErrors: true,
-            });
-        }
+        // Launch Playwright browser
+        browser = await chromium.launch({
+            headless: true, // Run in headless mode
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        });
 
         const page = await browser.newPage();
 
         // Navigate to the CNBC futures and commodities page with a longer timeout
         await page.goto('https://www.cnbc.com/futures-and-commodities/', {
-            waitUntil: 'networkidle2',
+            waitUntil: 'networkidle',
             timeout: 60000, // 60 seconds timeout
         });
 
