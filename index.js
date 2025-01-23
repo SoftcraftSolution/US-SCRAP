@@ -3,22 +3,31 @@ const { chromium } = require('playwright'); // Use Playwright's chromium browser
 const app = express();
 const PORT = process.env.PORT || 3005;
 
+// Middleware for better logging
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
+
 app.get('/api/energy-futures', async (req, res) => {
     let browser;
     try {
-        // Launch Playwright browser
+        // Launch Playwright browser with safe arguments
         browser = await chromium.launch({
-            headless: true, // Run in headless mode
+            headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
         });
 
         const page = await browser.newPage();
 
-        // Navigate to the CNBC futures and commodities page with a longer timeout
+        // Navigate to the CNBC futures and commodities page
         await page.goto('https://www.cnbc.com/futures-and-commodities/', {
-            waitUntil: 'networkidle',
+            waitUntil: 'domcontentloaded',
             timeout: 60000, // 60 seconds timeout
         });
+
+        // Wait for the table to load
+        await page.waitForSelector('div[data-test="MarketTable"] .BasicTable-tableBody', { timeout: 30000 });
 
         // Scrape both Energy Futures and Metal Futures data
         const futuresData = await page.evaluate(() => {
@@ -48,7 +57,6 @@ app.get('/api/energy-futures', async (req, res) => {
                 const percentChange = row.querySelector('td:nth-child(4)')?.innerText.trim() || '';
                 const volume = row.querySelector('td:nth-child(5)')?.innerText.trim() || '';
 
-                // Include only relevant metal symbols
                 if (symbol && (symbol.includes('GOLD') || symbol.includes('SILVER') || symbol.includes('PLATINUM') || symbol.includes('PALLADIUM'))) {
                     metalData.push({ symbol, price, change, percentChange, volume });
                 }
@@ -57,20 +65,21 @@ app.get('/api/energy-futures', async (req, res) => {
             return { energyFutures: energyData, metalFutures: metalData };
         });
 
-        // Log data to the console
-        console.log('Futures Data:', futuresData);
-        
         // Return the scraped energy and metal futures data
         res.json({
             energyFutures: { tableHeader: "Energy Futures", data: futuresData.energyFutures },
             metalFutures: { tableHeader: "Metal Futures", data: futuresData.metalFutures },
         });
     } catch (error) {
-        console.error('Error scraping data:', error);
-        res.status(500).json({ error: 'An error occurred while scraping data.' });
+        console.error('Error scraping data:', error.message);
+        res.status(500).json({ error: 'An error occurred while scraping data.', details: error.message });
     } finally {
         if (browser) {
-            await browser.close(); // Ensure the browser is closed on completion
+            try {
+                await browser.close(); // Ensure the browser is closed on completion
+            } catch (closeError) {
+                console.error('Error closing browser:', closeError.message);
+            }
         }
     }
 });
